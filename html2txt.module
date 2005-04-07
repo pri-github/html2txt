@@ -1,0 +1,217 @@
+<?php
+// $Id$
+
+// Author: Robert Castelo
+// Support: development@cortextcommunications.com
+// Info: http://www.cortextcommunications.com/development/newsletter
+// This module based on class.html2text.inc 
+// by Jon Abernathy <jon@chuggnutt.com>   
+
+/**
+ * Converts HTML to plain text equivalent.
+ */
+
+/**
+ * Implementation of hook_help().
+ */
+function html2txt_help($section) {
+  switch ($section) {
+    case 'admin/modules#description':
+      return t('Converts HTML to plain text.');
+  }
+}
+
+
+/**
+ *  Workhorse function that does actual conversion.
+ *
+ *  First performs custom tag replacement specified by $search and
+ *  $replace arrays. Then strips any remaining HTML tags, reduces whitespace
+ *  and newlines to a readable format, and word wraps the text to
+ *  $width characters.
+ *
+ */
+function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tags = '', $empty_lines_max = NULL) {
+    
+    $converted->text = $html;
+    
+    // Get HTML to search for
+    // Get replacements for HTML
+    $search = _html2txt_define_search();
+    $replace = _html2txt_define_replace();
+   
+    // Strip out links or list them?
+    if ($list_links) {
+    
+        global $link_list;
+        $link_list = '';
+        $link_count = 1;
+        $search[] = '/<a href="([^"]+)"[^>]*>(.+?)<\/a>/ie';
+        $replace[] = '_html2txt_build_link_list($link_count++, "\\1", "\\2")';
+    }
+
+    $converted->text = trim(stripslashes($converted->text));
+
+    // Run our defined search-and-replace
+    $converted->text = preg_replace($search, $replace, $converted->text);
+
+    // Strip any other HTML tags
+    $converted->text = strip_tags($converted->text, $allowed_tags);
+
+    // Bring down number of empty lines to 2 max
+    if ($empty_lines_max) {
+        $converted->text= preg_replace("/\n\s+\n/", "\n", $converted->text);
+        $converted->text = preg_replace("/[\n]{3,}/", "\n\n", $converted->text);
+    }
+
+    // Add link list
+    if ( !empty($link_list) ) {
+        $converted->links = "\n\nLinks:\n------\n" . $link_list;
+    }
+
+    // Wrap the text to a readable format
+    if ($width) {
+        $converted->text = wordwrap($converted->text, $width);
+    }
+    
+    // Convert HTML entities
+    $translation_table = get_html_translation_table(HTML_ENTITIES);
+    $translation_table = array_flip($translation_table);
+    $converted->text = strtr($converted->text, $translation_table);
+    
+    return $converted;
+}
+
+
+
+/**
+ *  List of preg* regular expression patterns to search for,
+ *  used in conjunction with $replace.
+ *
+ */
+function _html2txt_define_search() {
+
+    $search = array(
+        "/\r/",                                  // Non-legal carriage return
+        "/[\n\t]+/",                             // Newlines and tabs
+        '/<script[^>]*>.*?<\/script>/i',         // <script>s -- which strip_tags supposedly has problems with
+        //'/<!-- .* -->/',                         // Comments -- which strip_tags might have problem a with
+        '/<h[123][^>]*>(.+?)<\/h[123]>/ie',      // H1 - H3
+        '/<h[456][^>]*>(.+?)<\/h[456]>/ie',      // H4 - H6
+        '/<p[^>]*>/i',                           // <P>
+        '/<br[^>]*>/i',                          // <br>
+        '/<b[^>]*>(.+?)<\/b>/ie',                // <b>
+        '/<i[^>]*>(.+?)<\/i>/i',                 // <i>
+        '/(<ul[^>]*>|<\/ul>)/i',                 // <ul> and </ul>
+        '/(<ol[^>]*>|<\/ol>)/i',                 // <ol> and </ol>
+        '/<li[^>]*>/i',                          // <li>
+        '/<hr[^>]*>/i',                          // <hr>
+        '/(<table[^>]*>|<\/table>)/i',           // <table> and </table>
+        '/(<tr[^>]*>|<\/tr>)/i',                 // <tr> and </tr>
+        '/<td[^>]*>(.+?)<\/td>/i',               // <td> and </td>
+        '/<th[^>]*>(.+?)<\/th>/i',               // <th> and </th>
+        '/&nbsp;/i',
+        '/&quot;/i',
+        '/&gt;/i',
+        '/&lt;/i',
+        '/&amp;/i',
+        '/&copy;/i',
+        '/&trade;/i',
+        '/&#8220;/',
+        '/&#8221;/',
+        '/&#8211;/',
+        '/&#8217;/',
+        '/&#38;/',
+        '/&#169;/',
+        '/&#8482;/',
+        '/&#151;/',
+        '/&#147;/',
+        '/&#148;/',
+        '/&#149;/',
+        '/&reg;/i',
+        '/&bull;/i',
+        '/&[&;]+;/i'
+    );
+    
+    return $search;
+}
+
+/**
+ *  List of pattern replacements corresponding to patterns searched.
+ *
+ */
+function _html2txt_define_replace() {
+
+    $replace = array(
+        '',                                     // Non-legal carriage return
+        ' ',                                    // Newlines and tabs
+        '',                                     // <script>s -- which strip_tags supposedly has problems with
+        //'',                                     // Comments -- which strip_tags might have problem a with
+        "strtoupper(\"\n\n\\1\n\")",          // H1 - H3
+        "ucwords(\"\n\n\\1\n\n\")",             // H4 - H6
+        "\n\n",                               // <P>
+        "\n",                                   // <br>
+        'strtoupper("\\1")',                    // <b>
+        '_\\1_',                                // <i>
+        "\n\n",                                 // <ul> and </ul>
+        "\n\n",                                 // <ol> and </ol>
+        "\t*",                                  // <li>
+        "\n-------------------------\n",        // <hr>
+        "\n\n",                                 // <table> and </table>
+        "\n",                                   // <tr> and </tr>
+        "\t\t\\1\n",                            // <td> and </td>
+        "strtoupper(\"\t\t\\1\n\")",            // <th> and </th>
+        ' ',
+        '"',
+        '>',
+        '<',
+        '&',
+        '(c)',
+        '(tm)',
+        '"',
+        '"',
+        '-',
+        "'",
+        '&',
+        '(c)',
+        '(tm)',
+        '--',
+        '"',
+        '"',
+        '*',
+        '(R)',
+        '*',
+        ''
+    );
+    return $replace;
+}
+
+
+/**
+ *
+ *  Maintains an internal list of links to be displayed at the end of the
+ *  text, with numeric indices to the original point in the text they
+ *  appeared. Also makes an effort at identifying and handling absolute
+ *  and relative links.
+ *
+ */
+function _html2txt_build_link_list($link_count, $link, $display) {
+    
+    global $base_url;
+    global $link_list;
+    
+    if ( substr($link, 0, 7) == 'http://' || substr($link, 0, 7) == 'mailto:' ) {
+        $link_list .= "[$link_count] $link\n";
+    } else {
+        $link_list .= "[$link_count] " . $base_url;
+        if ( substr($link, 0, 1) != '/' ) {
+            $link_list .= '/';
+        }
+        $link_list .= "$link\n";
+    }
+
+    return $display . ' [' . $link_count . ']';
+}
+
+
+?>
