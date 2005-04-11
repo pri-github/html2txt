@@ -32,9 +32,17 @@ function html2txt_help($section) {
  *
  */
 function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tags = '', $empty_lines_max = NULL) {
-    
+
+    global $saved_snippets;
+    $snippet_count = 1;
+    $saved_snippets = array();
     $converted->text = $html;
+  
+    $converted->text = trim(stripslashes($converted->text));
     
+    // Take out <code>...</code> snippets for later
+    //$converted->text = preg_replace('@<code>(.+?)</code>@se', '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")', $converted->text);
+
     // Get HTML to search for
     // Get replacements for HTML
     $search = _html2txt_define_search();
@@ -42,15 +50,12 @@ function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tag
    
     // Strip out links or list them?
     if ($list_links) {
-    
         global $link_list;
         $link_list = '';
         $link_count = 1;
         $search[] = '/<a href="([^"]+)"[^>]*>(.+?)<\/a>/ie';
         $replace[] = '_html2txt_build_link_list($link_count++, "\\1", "\\2")';
     }
-
-    $converted->text = trim(stripslashes($converted->text));
 
     // Run our defined search-and-replace
     $converted->text = preg_replace($search, $replace, $converted->text);
@@ -68,17 +73,24 @@ function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tag
     if ( !empty($link_list) ) {
         $converted->links = "\n\nLinks:\n------\n" . $link_list;
     }
-
-    // Wrap the text to a readable format
-    if ($width) {
-        $converted->text = wordwrap($converted->text, $width);
-    }
     
     // Convert HTML entities
     $translation_table = get_html_translation_table(HTML_ENTITIES);
     $translation_table = array_flip($translation_table);
     $converted->text = strtr($converted->text, $translation_table);
     
+    // Load <code>...</code> snippets back in to text
+    if ( !empty($saved_snippets) ) {
+        foreach ($saved_snippets as $count => $snippet) {
+            $converted->text = str_replace('[html2txt-code-snippet-' . $count . ']', "\n" . stripslashes($snippet), $converted->text);
+        }
+    }
+    
+    // Wrap the text to a readable format
+    if ($width) {
+        $converted->text = wordwrap($converted->text, $width);
+    }
+
     return $converted;
 }
 
@@ -92,6 +104,7 @@ function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tag
 function _html2txt_define_search() {
 
     $search = array(
+        '@<code>(.+?)</code>@se',   // Take out <code>...</code> snippets for later
         "/\r/",                                  // Non-legal carriage return
         "/[\n\t]+/",                             // Newlines and tabs
         '/<script[^>]*>.*?<\/script>/i',         // <script>s -- which strip_tags supposedly has problems with
@@ -143,6 +156,7 @@ function _html2txt_define_search() {
 function _html2txt_define_replace() {
 
     $replace = array(
+        '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")', // Take out <code>...</code> snippets for later
         '',                                     // Non-legal carriage return
         ' ',                                    // Newlines and tabs
         '',                                     // <script>s -- which strip_tags supposedly has problems with
@@ -189,7 +203,7 @@ function _html2txt_define_replace() {
 
 /**
  *
- *  Maintains an internal list of links to be displayed at the end of the
+ *  Maintains an internal list of links to be displayed seperate to the
  *  text, with numeric indices to the original point in the text they
  *  appeared. Also makes an effort at identifying and handling absolute
  *  and relative links.
@@ -211,6 +225,20 @@ function _html2txt_build_link_list($link_count, $link, $display) {
     }
 
     return $display . ' [' . $link_count . ']';
+}
+
+/**
+ *
+ *  Temporeraly replaces <code>...</code> with a placeholder
+ *
+ */
+function _html2txt_get_code_snippets($snippet_count, $snippet, $display) {
+    
+    global $saved_snippets;
+    
+    $saved_snippets[$snippet_count] = $snippet;
+
+    return $display . '[html2txt-code-snippet-' . $snippet_count . ']';
 }
 
 
