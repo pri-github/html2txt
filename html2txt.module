@@ -10,6 +10,8 @@
 /**
  * Converts HTML to plain text equivalent.
  */
+ 
+ $GLOBALS['installed_modules']['html2txt'] = 1.3;
 
 /**
  * Implementation of hook_help().
@@ -26,35 +28,35 @@ function html2txt_help($section) {
  *  Workhorse function that does actual conversion.
  *
  *  First performs custom tag replacement specified by $search and
- *  $replace arrays. Then strips any remaining HTML tags, reduces whitespace
- *  and newlines to a readable format, and word wraps the text to
+ *  $replace arrays. Then strips any remaining HTML tags, and word wraps the text to
  *  $width characters.
  *
  */
-function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tags = '', $empty_lines_max = NULL) {
+function html2txt_convert($html, $width = NULL, $links_inline = FALSE, $allowed_tags = '') {
 
     global $saved_snippets;
     $snippet_count = 1;
     $saved_snippets = array();
     $converted->text = $html;
-  
+
     $converted->text = trim(stripslashes($converted->text));
     
-    // Take out <code>...</code> snippets for later
-    //$converted->text = preg_replace('@<code>(.+?)</code>@se', '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")', $converted->text);
-
     // Get HTML to search for
-    // Get replacements for HTML
     $search = _html2txt_define_search();
+    
+    // Get plain text replacements for HTML
     $replace = _html2txt_define_replace();
-   
+    
     // Strip out links or list them?
-    if ($list_links) {
+    $search[] = '/<a href="([^"]+)"[^>]*>(.+?)<\/a>/ie';
+    
+    if ($links_inline) {
+        $replace[] = '_html2txt_links_inline("\\1", "\\2")';
+    } else {
         global $link_list;
         $link_list = '';
         $link_count = 1;
-        $search[] = '/<a href="([^"]+)"[^>]*>(.+?)<\/a>/ie';
-        $replace[] = '_html2txt_build_link_list($link_count++, "\\1", "\\2")';
+        $replace[] = '_html2txt_links_list_build("\\1", "\\2")';
     }
 
     // Run our defined search-and-replace
@@ -63,15 +65,9 @@ function html2txt_convert($html, $width = NULL, $list_links = NULL, $allowed_tag
     // Strip any other HTML tags
     $converted->text = strip_tags($converted->text, $allowed_tags);
 
-    // Bring down number of empty lines to 2 max
-    if ($empty_lines_max) {
-        $converted->text= preg_replace("/\n\s+\n/", "\n", $converted->text);
-        $converted->text = preg_replace("/[\n]{3,}/", "\n\n", $converted->text);
-    }
-
     // Add link list
     if ( !empty($link_list) ) {
-        $converted->links = "\n\nLinks:\n------\n" . $link_list;
+        $converted->links = "Links:\n------\n" . $link_list;
     }
     
     // Convert HTML entities
@@ -105,16 +101,20 @@ function _html2txt_define_search() {
 
     $search = array(
         '@<code>(.+?)</code>@se',   // Take out <code>...</code> snippets for later
-        "/\r/",                                  // Non-legal carriage return
-        "/[\n\t]+/",                             // Newlines and tabs
+        "/(\r\n|\r|\n)+/",                     // New lines and Carriage returns
+        "/[\t]+/",                             // Tabs        "/[\t]+/",                             // Tabs
         '/<script[^>]*>.*?<\/script>/i',         // <script>s -- which strip_tags supposedly has problems with
         //'/<!-- .* -->/',                         // Comments -- which strip_tags might have problem a with
-        '/<h[123][^>]*>(.+?)<\/h[123]>/ie',      // H1 - H3
-        '/<h[456][^>]*>(.+?)<\/h[456]>/ie',      // H4 - H6
-        '/<p[^>]*>/i',                           // <P>
-        '/<br[^>]*>/i',                          // <br>
-        '/<b[^>]*>(.+?)<\/b>/ie',                // <b>
-        '/<i[^>]*>(.+?)<\/i>/i',                 // <i>
+        '!<h1[^>]*>(.+?)</h[1]>!ie',              // H1
+        '!<h2[^>]*>(.+?)</h[2]>!ie',              // H2
+        '/<h3[^>]*>(.+?)<\/h3>/ie',                   // H3
+        '/<h[456][^>]*>(.+?)<\/h[456]>/ie',           // H4 - H6
+        '!<blockquote[^>]*>!i',                       // <blockquote>
+        '!</blockquote>!i',                           // </blockquote>
+        '!</p[^>]*>!i',                              // <p>
+        "/<br[^>]*>\n?/i",                            // <br> 
+        //'/<b[^>]*>(.+?)<\/b>/ie',                // <b> (will get striped out anyway - leave here to add in options later))
+        //'/</?(em|i)[^>]*>(.+?)<\/i>/i',         // <em> and <i>
         '/(<ul[^>]*>|<\/ul>)/i',                 // <ul> and </ul>
         '/(<ol[^>]*>|<\/ol>)/i',                 // <ol> and </ol>
         '/<li[^>]*>/i',                          // <li>
@@ -157,20 +157,24 @@ function _html2txt_define_replace() {
 
     $replace = array(
         '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")', // Take out <code>...</code> snippets for later
-        '',                                     // Non-legal carriage return
-        ' ',                                    // Newlines and tabs
+        "",                             // New lines and Carriage returns
+        ' ',                                    // Tabs
         '',                                     // <script>s -- which strip_tags supposedly has problems with
         //'',                                     // Comments -- which strip_tags might have problem a with
-        "strtoupper(\"\n\n\\1\n\")",          // H1 - H3
-        "ucwords(\"\n\n\\1\n\n\")",             // H4 - H6
-        "\n\n",                               // <P>
+        "\"\n\" . strtoupper('\\1') . \"\n\n\"",    // H1
+        "ucwords('\\1') . \"\n\n\"",    // H2
+        "ucwords('\\1') . \"\n\"",    // H3
+        "ucwords('\\1') . \"\n\"",                   // H4 - H6
+        "\n\t",                                       // <blockquote>
+        "\n\n",                                         // </blockquote>
+        "\n\n",                               // <p>
         "\n",                                   // <br>
-        'strtoupper("\\1")',                    // <b>
-        '_\\1_',                                // <i>
+        //'strtoupper("\\1")',               // <b>
+        //'_\\1_',                                // <em> and <i>
         "\n\n",                                 // <ul> and </ul>
         "\n\n",                                 // <ol> and </ol>
         "\t*",                                  // <li>
-        "\n-------------------------\n",        // <hr>
+        "-------------------------",        // <hr>
         "\n\n",                                 // <table> and </table>
         "\n",                                   // <tr> and </tr>
         "\t\t\\1\n",                            // <td> and </td>
@@ -209,23 +213,59 @@ function _html2txt_define_replace() {
  *  and relative links.
  *
  */
-function _html2txt_build_link_list($link_count, $link, $display) {
+function _html2txt_links_list_build($link, $display) {
     
-    global $base_url;
     global $link_list;
+    static $links = array();
+    static $link_count = 0;
     
-    if ( substr($link, 0, 7) == 'http://' || substr($link, 0, 7) == 'mailto:' ) {
-        $link_list .= "[$link_count] $link\n";
+    $duplicate_link = array_keys($links, $link);
+
+    if (count($duplicate_link) == 0) {
+        
+        $link_count++;
+        $links[$link_count] = $link;
+        $link_list .= "[$link_count] " . html2txt_links_make_absolute($link) . "\n";
+        $output = $display . ' [' . $link_count . ']';
+        
     } else {
-        $link_list .= "[$link_count] " . $base_url;
-        if ( substr($link, 0, 1) != '/' ) {
-            $link_list .= '/';
-        }
-        $link_list .= "$link\n";
+
+        $output = $display . ' [' . $duplicate_link[0] . ']';
     }
 
-    return $display . ' [' . $link_count . ']';
+    return $output;
 }
+
+function _html2txt_links_inline($link, $display) {
+
+    $output = "$display (" . html2txt_links_make_absolute($link) . ')';
+    
+    return $output;
+}
+
+
+function html2txt_links_make_absolute($link, $display = NULL) {
+
+    global $base_url;    
+    $processed_link = $link;
+    
+    if ( substr($link, 0, 7) != 'http://' && substr($link, 0, 7) != 'mailto:' ) {
+    
+        $processed_link = $base_url;
+        
+        if ( substr($link, 0, 1) != '/' ) {
+            $processed_link .= '/';
+        }
+        
+        $processed_link .= $link;
+    }
+    
+    if ($display) $processed_link = '<a href="' . $processed_link . '">' . $display . '</a>';
+    
+    return $processed_link;
+}
+
+
 
 /**
  *
