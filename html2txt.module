@@ -28,12 +28,11 @@ function html2txt_help($section) {
  *  Workhorse function that does actual conversion.
  *
  *  First performs custom tag replacement specified by $search and
- *  $replace arrays. Then strips any remaining HTML tags, reduces whitespace
- *  and newlines to a readable format, and word wraps the text to
+ *  $replace arrays. Then strips any remaining HTML tags, and word wraps the text to
  *  $width characters.
  *
  */
-function html2txt_convert($html, $width = NULL, $links_inline = TRUE, $allowed_tags = '') {
+function html2txt_convert($html, $width = NULL, $links_inline = FALSE, $allowed_tags = '') {
 
     global $saved_snippets;
     $snippet_count = 1;
