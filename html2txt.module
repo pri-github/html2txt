@@ -15,8 +15,8 @@
 /**
  * Implementation of hook_help().
  */
-function html2txt_help($section) {
-  switch ($section) {
+function html2txt_help($path, $arg) {
+  switch ($path) {
     case 'admin/modules#description':
       return t('Converts HTML to plain text.');
   }
@@ -273,7 +273,7 @@ function html2txt_image_absolute($path) {
 }
 
 /**
- * Temporeraly replaces <code>...</code> with a placeholder.
+ * Temporarily replaces <code>...</code> with a placeholder.
  */
 function _html2txt_get_code_snippets($snippet_count, $snippet, $display) {
   global $saved_snippets;

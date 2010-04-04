@@ -1,6 +1,5 @@
 ; $Id$
 name = HTML to Text
-description = Converts HTML into plain text. Useful for sending emails as plain text.
+description = Converts HTML into plain text.
 package = Subscribed
-version = "$Name$"
-
+core = 6.x
