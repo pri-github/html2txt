@@ -1,4 +1,3 @@
-; $Id$
 name = HTML to Text
 description = Converts HTML into plain text.
 package = Subscribed
