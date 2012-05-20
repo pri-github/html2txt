@@ -242,7 +242,7 @@ function html2txt_links_make_absolute($link, $display = NULL) {
   global $base_url;    
   $processed_link = $link;
 
-  if (substr($link, 0, 7) != 'http://' && substr($link, 0, 7) != 'mailto:') {
+  if (substr($link, 0, 7) != 'http://' && substr($link, 0, 7) != 'mailto:' && substr($link, 0, 8) != 'https://') {
     $processed_link = $base_url;
     if ( substr($link, 0, 1) != '/' ) {
       $processed_link .= '/';
