@@ -1,6 +1,5 @@
 name = HTML to Text
 description = Converts HTML into plain text.
 package = Subscribed
-core = 6.x
-
-
+core = 7.x
+files[] = html2txt.module
