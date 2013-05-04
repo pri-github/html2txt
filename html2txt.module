@@ -3,16 +3,16 @@
 /**
  * @file
  * This module converts HTML into plain text.
- * 
+ *
  * The kind of thing you might want to do if you're sending the contents of a
  * HTML page as a plain text email.
- * 
- * This module based on class.html2text.inc 
+ *
+ * This module based on class.html2text.inc
  * by Jon Abernathy <jon@chuggnutt.com>
  */
 
 /**
- * Implementation of hook_help().
+ * Implements hook_help().
  */
 function html2txt_help($path, $arg) {
   switch ($path) {
@@ -25,33 +25,33 @@ function html2txt_help($path, $arg) {
  * Workhorse function that does actual conversion.
  *
  * First performs custom tag replacement specified by $search and
- * $replace arrays. Then strips any remaining HTML tags, and word wraps the text to
- * $width characters.
+ * $replace arrays. Then strips any remaining HTML tags, and word wraps the text
+ * to $width characters.
  */
 function html2txt_convert($html, $width = NULL, $links_inline = FALSE, $allowed_tags = '') {
-  global $saved_snippets;
+  global $_html2txt_saved_snippets;
 
   $snippet_count = 1;
-  $saved_snippets = array();
+  $_html2txt_saved_snippets = array();
   $converted->text = $html;
 
   $converted->text = trim(stripslashes($converted->text));
-  
+
   // Get HTML to search for.
-  $search = _html2txt_define_search();
-  
+  $search = _html2txt_search_define();
+
   // Get plain text replacements for HTML.
-  $replace = _html2txt_define_replace();
-  
+  $replace = _html2txt_replace_define();
+
   // Strip out links or list them?
   $search[] = '/<a href="([^"]+)"[^>]*>(.+?)<\/a>/ie';
-  
+
   if ($links_inline) {
     $replace[] = '_html2txt_links_inline("\\1", "\\2")';
   }
   else {
-    global $link_list;
-    $link_list = '';
+    global $_html2txt_link_list;
+    $_html2txt_link_list = '';
     $link_count = 1;
     $replace[] = '_html2txt_links_list_build("\\1", "\\2")';
   }
@@ -63,22 +63,22 @@ function html2txt_convert($html, $width = NULL, $links_inline = FALSE, $allowed_
   $converted->text = strip_tags($converted->text, $allowed_tags);
 
   // Add link list.
-  if (!empty($link_list)) {
-    $converted->links = "Links:\n------\n". $link_list;
+  if (!empty($_html2txt_link_list)) {
+    $converted->links = "Links:\n------\n" . $_html2txt_link_list;
   }
-  
+
   // Convert HTML entities.
   $translation_table = get_html_translation_table(HTML_ENTITIES);
   $translation_table = array_flip($translation_table);
   $converted->text = strtr($converted->text, $translation_table);
-  
+
   // Load <code>...</code> snippets back in to text.
-  if (!empty($saved_snippets)) {
-    foreach ($saved_snippets as $count => $snippet) {
-      $converted->text = str_replace('[html2txt-code-snippet-'. $count .']', "\n". stripslashes($snippet), $converted->text);
+  if (!empty($_html2txt_saved_snippets)) {
+    foreach ($_html2txt_saved_snippets as $count => $snippet) {
+      $converted->text = str_replace('[html2txt-code-snippet-' . $count . ']', "\n" . stripslashes($snippet), $converted->text);
     }
   }
-  
+
   // Wrap the text to a readable format.
   if ($width) {
     $converted->text = wordwrap($converted->text, $width);
@@ -88,34 +88,58 @@ function html2txt_convert($html, $width = NULL, $links_inline = FALSE, $allowed_
 }
 
 /**
- * List of preg* regular expression patterns to search for,
- * used in conjunction with $replace.
+ * List of preg* regular expression patterns to search for.
+ *
+ * Used in conjunction with $replace.
  */
-function _html2txt_define_search() {
+function _html2txt_search_define() {
   $search = array(
-    '@<code>(.+?)</code>@se',           // Take out <code>...</code> snippets for later
-    "/(\r\n|\r|\n)+/",                  // New lines and Carriage returns
-    "/[\t]+/",                          // Tabs        "/[\t]+/",                             // Tabs
-    '/<script[^>]*>.*?<\/script>/i',    // <script>s -- which strip_tags supposedly has problems with
-    //'/<!-- .* -->/',                  // Comments -- which strip_tags might have problem a with
-    '!<h1[^>]*>(.+?)</h[1]>!ie',        // H1
-    '!<h2[^>]*>(.+?)</h[2]>!ie',        // H2
-    '/<h3[^>]*>(.+?)<\/h3>/ie',         // H3
-    '/<h[456][^>]*>(.+?)<\/h[456]>/ie', // H4 - H6
-    '!<blockquote[^>]*>!i',             // <blockquote>
-    '!</blockquote>!i',                 // </blockquote>
-    '!</p[^>]*>!i',                     // <p>
-    "/<br[^>]*>\n?/i",                  // <br> 
-    //'/<b[^>]*>(.+?)<\/b>/ie',         // <b> (will get striped out anyway - leave here to add in options later))
-    //'/</?(em|i)[^>]*>(.+?)<\/i>/i',   // <em> and <i>
-    '/(<ul[^>]*>|<\/ul>)/i',            // <ul> and </ul>
-    '/(<ol[^>]*>|<\/ol>)/i',            // <ol> and </ol>
-    '/<li[^>]*>/i',                     // <li>
-    '/<hr[^>]*>/i',                     // <hr>
-    '/(<table[^>]*>|<\/table>)/i',      // <table> and </table>
-    '/(<tr[^>]*>|<\/tr>)/i',            // <tr> and </tr>
-    '/<td[^>]*>(.+?)<\/td>/i',          // <td> and </td>
-    '/<th[^>]*>(.+?)<\/th>/i',          // <th> and </th>
+    // Take out <code>...</code> snippets for later.
+    '@<code>(.+?)</code>@se',
+    // New lines and Carriage returns.
+    "/(\r\n|\r|\n)+/",
+    // Tabs.
+    "/[\t]+/",
+    // <script>s -- which strip_tags supposedly has problems with.
+    '/<script[^>]*>.*?<\/script>/i',
+    // Comments -- which strip_tags might have problem a with.
+    // '/<!-- .* -->/',
+    // H1.
+    '!<h1[^>]*>(.+?)</h[1]>!ie',
+    // H2.
+    '!<h2[^>]*>(.+?)</h[2]>!ie',
+    // H3.
+    '/<h3[^>]*>(.+?)<\/h3>/ie',
+    // H4 - H6.
+    '/<h[456][^>]*>(.+?)<\/h[456]>/ie',
+    // <blockquote>.
+    '!<blockquote[^>]*>!i',
+    // </blockquote>.
+    '!</blockquote>!i',
+    // <p>.
+    '!</p[^>]*>!i',
+    // <br>.
+    "/<br[^>]*>\n?/i",
+    // <b> (will get striped out anyway - leave here to add in options later)).
+    // '/<b[^>]*>(.+?)<\/b>/ie',
+    // <em> and <i>.
+    // '/</?(em|i)[^>]*>(.+?)<\/i>/i',
+    // <ul> and </ul>
+    '/(<ul[^>]*>|<\/ul>)/i',
+    // <ol> and </ol>
+    '/(<ol[^>]*>|<\/ol>)/i',
+    // <li>
+    '/<li[^>]*>/i',
+    // <hr>
+    '/<hr[^>]*>/i',
+    // <table> and </table>
+    '/(<table[^>]*>|<\/table>)/i',
+    // <tr> and </tr>
+    '/(<tr[^>]*>|<\/tr>)/i',
+    // <td> and </td>
+    '/<td[^>]*>(.+?)<\/td>/i',
+    // <th> and </th>
+    '/<th[^>]*>(.+?)<\/th>/i',
     '/&nbsp;/i',
     '/&quot;/i',
     '/&gt;/i',
@@ -137,40 +161,63 @@ function _html2txt_define_search() {
     '/&reg;/i',
     '/&bull;/i',
     '/&[&;]+;/i',
-    '/&#39;/'
+    '/&#39;/',
   );
-  
+
   return $search;
 }
 
 /**
  * List of pattern replacements corresponding to patterns searched.
  */
-function _html2txt_define_replace() {
+function _html2txt_replace_define() {
   $replace = array(
-    '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")', // Take out <code>...</code> snippets for later
-    "",                                      // New lines and Carriage returns
-    ' ',                                     // Tabs
-    '',                                      // <script>s -- which strip_tags supposedly has problems with
-    //'',                                    // Comments -- which strip_tags might have problem a with
-    "\"\n\". strtoupper('\\1') . \"\n\n\"", // H1
-    "ucwords('\\1') . \"\n\n\"",             // H2
-    "ucwords('\\1') . \"\n\"",               // H3
-    "ucwords('\\1') . \"\n\"",               // H4 - H6
-    "\n\t",                                  // <blockquote>
-    "\n\n",                                  // </blockquote>
-    "\n\n",                                  // <p>
-    "\n",                                    // <br>
-    //'strtoupper("\\1")',                   // <b>
-    //'_\\1_',                               // <em> and <i>
-    "\n\n",                                  // <ul> and </ul>
-    "\n\n",                                  // <ol> and </ol>
-    "\t*",                                   // <li>
-    "-------------------------",             // <hr>
-    "\n\n",                                  // <table> and </table>
-    "\n",                                    // <tr> and </tr>
-    "\t\t\\1\n",                             // <td> and </td>
-    "strtoupper(\"\t\t\\1\n\")",             // <th> and </th>
+    // Take out <code>...</code> snippets for later.
+    '_html2txt_get_code_snippets($snippet_count++, "\\1", "\\2")',
+    // New lines and Carriage returns.
+    "",
+    // Tabs.
+    ' ',
+    // <script>s -- which strip_tags supposedly has problems with.
+    '',
+    // Comments -- which strip_tags might have problem a with.
+    // '',
+    "\"\n\". strtoupper('\\1') . \"\n\n\"",
+    // H1.
+    // H2.
+    "ucwords('\\1') . \"\n\n\"",
+    // H3.
+    "ucwords('\\1') . \"\n\"",
+    // H4 - H6.
+    "ucwords('\\1') . \"\n\"",
+    // <blockquote>.
+    "\n\t",
+    // </blockquote>.
+    "\n\n",
+    // <p>.
+    "\n\n",
+    // <br>.
+    "\n",
+    // <b>.
+    // 'strtoupper("\\1")',
+    // <em> and <i>.
+    // '_\\1_',
+    // <ul> and </ul>.
+    "\n\n",
+    // <ol> and </ol>.
+    "\n\n",
+    // <li>
+    "\t*",
+    // <hr>
+    "-------------------------",
+    // <table> and </table>
+    "\n\n",
+    // <tr> and </tr>
+    "\n",
+    // <td> and </td>
+    "\t\t\\1\n",
+    // <th> and </th>
+    "strtoupper(\"\t\t\\1\n\")",
     ' ',
     '"',
     '>',
@@ -192,33 +239,34 @@ function _html2txt_define_replace() {
     '(R)',
     '*',
     '',
-    "'"
+    "'",
   );
   return $replace;
 }
 
 
 /**
- * Maintains an internal list of links to be displayed seperate to the
- * text, with numeric indices to the original point in the text they
- * appeared. Also makes an effort at identifying and handling absolute
- * and relative links.
+ * Maintains an internal list of links to be displayed.
+ *
+ * Links are displayed seperate to the text, with numeric indices to the
+ * original point in the text they appeared. Also makes an effort at identifying
+ * and handling absolute and relative links.
  */
 function _html2txt_links_list_build($link, $display) {
-  global $link_list;
+  global $_html2txt_link_list;
   static $links = array();
   static $link_count = 0;
-  
+
   $duplicate_link = array_keys($links, $link);
 
   if (count($duplicate_link) == 0) {
-    $link_count++;
+    ++$link_count;
     $links[$link_count] = $link;
-    $link_list .= "[$link_count] ". html2txt_links_make_absolute($link) ."\n";
-    $output = $display .' ['. $link_count .']';
+    $_html2txt_link_list .= "[$link_count] " . html2txt_links_make_absolute($link) . "\n";
+    $output = $display . ' [' . $link_count . ']';
   }
   else {
-    $output = $display .' ['. $duplicate_link[0] .']';
+    $output = $display . ' [' . $duplicate_link[0] . ']';
   }
 
   return $output;
@@ -228,35 +276,33 @@ function _html2txt_links_list_build($link, $display) {
  * Scape links inline between parenthesis.
  */
 function _html2txt_links_inline($link, $display) {
-  $output = "$display (". html2txt_links_make_absolute($link) .')';
+  $output = "$display (" . html2txt_links_make_absolute($link) . ')';
   return $output;
 }
-
-
 
 /**
  * Make links absolute.
  */
 function html2txt_links_make_absolute($link, $display = NULL) {
 
-  global $base_url;    
+  global $base_url;
   $processed_link = $link;
 
   if (substr($link, 0, 7) != 'http://' && substr($link, 0, 7) != 'mailto:' && substr($link, 0, 8) != 'https://') {
     $processed_link = $base_url;
-    if ( substr($link, 0, 1) != '/' ) {
+    if (substr($link, 0, 1) != '/') {
       $processed_link .= '/';
     }
     $processed_link .= $link;
   }
 
   if ($display == 'image') {
-    $processed_link = 'src="'. $processed_link .'"';
+    $processed_link = 'src="' . $processed_link . '"';
   }
 
   if ($display) {
-    $display = str_replace("\'", "'", $display); 
-    $processed_link = '<a href="'. $processed_link .'">'. $display .'</a>';
+    $display = str_replace("\'", "'", $display);
+    $processed_link = '<a href="' . $processed_link . '">' . $display . '</a>';
   }
 
   return $processed_link;
@@ -266,18 +312,18 @@ function html2txt_links_make_absolute($link, $display = NULL) {
  * Make image paths absolute.
  */
 function html2txt_image_absolute($path) {
- $path = html2txt_links_make_absolute($path); 
- $output = 'src="' . $path . '"';
- return $output;
+  $path = html2txt_links_make_absolute($path);
+  $output = 'src="' . $path . '"';
+  return $output;
 }
 
 /**
  * Temporarily replaces <code>...</code> with a placeholder.
  */
 function _html2txt_get_code_snippets($snippet_count, $snippet, $display) {
-  global $saved_snippets;
-  
-  $saved_snippets[$snippet_count] = $snippet;
+  global $_html2txt_saved_snippets;
 
-  return $display .'[html2txt-code-snippet-'. $snippet_count .']';
+  $_html2txt_saved_snippets[$snippet_count] = $snippet;
+
+  return $display . '[html2txt-code-snippet-' . $snippet_count . ']';
 }
