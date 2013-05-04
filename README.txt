@@ -3,7 +3,8 @@
 ********************************************************************
 Name: HTML To Text Module
 Author: Robert Castelo
-Drupal: 6.x
+D7 Maintainer: kenorb (Rafal)
+Drupal: 7.x
 ********************************************************************
 DESCRIPTION:
 
@@ -30,9 +31,6 @@ check the Drupal web site if you need assistance.
   Click the 'Save configuration' button at the bottom to commit your
   changes.
   
-
-
-
 ********************************************************************
 AUTHOR CONTACT
 
@@ -44,18 +42,8 @@ AUTHOR CONTACT
    
 - Want To Say Thank You:
    http://www.amazon.com/gp/registry/O6JKRQEQ774F
-
         
 ********************************************************************
 ACKNOWLEDGEMENT
-
-Developed by Robert Castelo for Code Positive <http://www.codepositive.com>
-
-
-
-
-
-
-
-
+Drupal 6 version developed by Robert Castelo for Code Positive <http://www.codepositive.com>
 
